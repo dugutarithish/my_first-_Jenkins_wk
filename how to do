@@ -1,0 +1,189 @@
+Here’s a simple multi-stage and multi-agent Jenkins pipeline using Docker. This example assumes you're running Jenkins with Docker and want to use different containers (agents) for different stages.
+
+Let’s say you have a basic Python app that needs to:
+
+Clone the repo
+
+Run tests in a Python container
+
+Build a Docker image
+
+Deploy using another container
+
+✅ Prerequisites
+Docker installed on the Jenkins host
+
+Docker installed on the agents (or Docker-in-Docker if using containers)
+
+Jenkins configured to allow Docker commands (add jenkins to the docker group)
+
+
+
+
+📂 Example Project Structure
+markdown
+Copy
+Edit
+my-python-app/
+├── Dockerfile
+├── app.py
+├── requirements.txt
+└── tests/
+    └── test_app.py
+
+
+
+
+🧱 Dockerfile (Example)
+dockerfile
+Copy
+Edit
+FROM python:3.11-slim
+WORKDIR /app
+COPY . .
+RUN pip install -r requirements.txt
+CMD ["python", "app.py"]
+
+
+
+📜 Overview of the Jenkinsfile Structure
+groovy
+Copy
+Edit
+pipeline {
+    agent none         👈 Start with no global agent
+    stages {
+        ...
+    }
+}
+
+✅ Stage 1: Clone Repo
+groovy
+Copy
+Edit
+stage('Clone Repo') {
+    agent { label 'ubuntu-node' }
+    steps {
+        checkout scm
+    }
+}
+🔍 Explanation:
+agent { label 'ubuntu-node' }: This stage runs on a Jenkins node (agent) that has the label ubuntu-node.
+
+checkout scm: This pulls your Git repository source code (automatically uses the one configured in your Jenkins job).
+
+👉 Useful if you want your Git operations to run on a basic agent that has Git but doesn’t need Docker.
+
+✅ Stage 2: Run Tests (Docker Agent)
+groovy
+Copy
+Edit
+stage('Run Tests') {
+    agent {
+        docker {
+            image 'python:3.11-slim'
+            args '-v /tmp:/tmp'
+        }
+    }
+    steps {
+        sh '''
+        pip install -r requirements.txt
+        python -m unittest discover tests
+        '''
+    }
+}
+
+
+🔍 Explanation:
+docker { image 'python:3.11-slim' }: Jenkins will pull and run this Docker image to execute the stage.
+
+sh '''...''': Inside the container, we:
+
+Install the required Python packages
+
+Run unit tests using unittest
+
+👉 This is useful because you don't need Python installed on the Jenkins node — just Docker
+
+
+
+✅ Stage 3: Build Docker Image
+groovy
+Copy
+Edit
+stage('Build Docker Image') {
+    agent { label 'docker-agent' }
+    steps {
+        sh '''
+        docker build -t my-python-app:latest .
+        '''
+    }
+}
+
+
+🔍 Explanation:
+This runs on an agent labeled docker-agent, which must have Docker installed (Docker CLI and Docker daemon access).
+
+It builds your Docker image using your local Dockerfile.
+
+👉 This is the stage where your app becomes a Docker image.
+
+
+
+
+✅ Stage 4: Deploy
+groovy
+Copy
+Edit
+stage('Deploy') {
+    agent {
+        docker {
+            image 'alpine'
+        }
+    }
+    steps {
+        echo 'Deploying the application...'
+        sh 'echo Deployment successful!'
+    }
+}
+🔍 Explanation:
+This runs in a lightweight Alpine Linux Docker container.
+
+It simulates a deployment. In real scenarios, you'd replace this with:
+
+kubectl apply -f
+
+docker run
+
+scp or other deployment tools
+
+
+
+
+✅ Post Step
+groovy
+Copy
+Edit
+post {
+    always {
+        echo 'Pipeline completed.'
+    }
+}
+This always runs at the end — regardless of success or failure.
+
+Good for sending notifications or cleaning up.
+
+
+🧠 Summary of Concepts
+Concept	Meaning
+Multi-Stage	Each stage in the pipeline does one job (clone, test, build, deploy)
+Multi-Agent	Each stage can run on a different Jenkins agent or Docker container
+Docker Agents	Jenkins spins up temporary Docker containers to run isolated tasks
+Label Agents	Use specific Jenkins nodes/VMs for tasks that require Docker CLI or other tools
+
+
+
+
+
+
+

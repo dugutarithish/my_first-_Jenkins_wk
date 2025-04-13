@@ -1,0 +1,56 @@
+pipeline {
+    agent none
+
+    stages {
+
+        stage('Clone Repo') {
+            agent { label 'ubuntu-node' } // Can be any label where Git is available
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Run Tests') {
+            agent {
+                docker {
+                    image 'python:3.11-slim'
+                    args '-v /tmp:/tmp' // Optional
+                }
+            }
+            steps {
+                sh '''
+                pip install -r requirements.txt
+                python -m unittest discover tests
+                '''
+            }
+        }
+
+        stage('Build Docker Image') {
+            agent { label 'docker-agent' } // Docker-in-Docker enabled agent
+            steps {
+                sh '''
+                docker build -t my-python-app:latest .
+                '''
+            }
+        }
+
+        stage('Deploy') {
+            agent {
+                docker {
+                    image 'alpine'
+                }
+            }
+            steps {
+                echo 'Deploying the application...'
+                // Simulate deploy
+                sh 'echo Deployment successful!'
+            }
+        }
+    }
+
+    post {
+        always {
+            echo 'Pipeline completed.'
+        }
+    }
+}
